@@ -1,3 +1,4 @@
+import { getSubmission, getPdfUrl } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -11,60 +12,57 @@ export default async function SubmissionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
-  const { data: submission } = await supabase
-    .from("submissions")
-    .select(`
-      *,
-      reviewers(*),
-      reviews(*, reviewer:reviewers(*))
-    `)
-    .eq("id", id)
-    .single();
-
+  const submission = getSubmission(id);
   if (!submission) return notFound();
 
+  const { data: reviewers } = await supabase
+    .from("reviewers")
+    .select("*")
+    .eq("submission_id", id);
+
+  const { data: reviews } = await supabase
+    .from("reviews")
+    .select("*, reviewer:reviewers(*)")
+    .eq("submission_id", id);
+
+  const pdfUrl = getPdfUrl(submission.pdf_file);
+
   const avgScore =
-    submission.reviews && submission.reviews.length > 0
-      ? (
-          submission.reviews.reduce(
-            (sum: number, r: { score: number }) => sum + r.score,
-            0
-          ) / submission.reviews.length
-        ).toFixed(1)
+    reviews && reviews.length > 0
+      ? (reviews.reduce((sum: number, r: { score: number }) => sum + r.score, 0) / reviews.length).toFixed(1)
       : null;
 
   return (
     <div>
       <Link href="/" className="text-sm text-[var(--muted)] no-underline hover:text-[var(--foreground)]">
-        &larr; All Submissions
+        &larr; All Projects
       </Link>
 
-      <div className="mt-4 mb-8">
+      <div className="mt-4 mb-6">
         <h1 className="text-2xl font-semibold">{submission.title}</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          {submission.author_name} &middot; {submission.author_email} &middot;{" "}
-          {new Date(submission.created_at).toLocaleDateString()}
+          {submission.authors} &middot; Mentor: {submission.mentor || "Unassigned"}
+          {submission.milestone_score !== null && (
+            <> &middot; Milestone: {submission.milestone_score}</>
+          )}
         </p>
-        {submission.pdf_url && (
-          <a
-            href={submission.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block mt-3 text-sm px-3 py-1.5 border border-[var(--border)] rounded no-underline hover:bg-[var(--surface)] hover:no-underline text-[var(--foreground)]"
-          >
-            View PDF
-          </a>
-        )}
+        <a
+          href={pdfUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block mt-3 text-sm px-3 py-1.5 border border-[var(--border)] rounded no-underline hover:bg-[var(--surface)] hover:no-underline text-[var(--foreground)]"
+        >
+          View PDF
+        </a>
       </div>
 
       {/* Reviewers */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">
-          Reviewers ({submission.reviewers?.length ?? 0} / 2)
+          Reviewers ({reviewers?.length ?? 0} / 2)
         </h2>
 
-        {submission.reviewers && submission.reviewers.length > 0 ? (
+        {reviewers && reviewers.length > 0 ? (
           <div className="border border-[var(--border)] rounded overflow-hidden mb-4">
             <table className="w-full text-sm">
               <thead>
@@ -76,55 +74,38 @@ export default async function SubmissionPage({
                 </tr>
               </thead>
               <tbody>
-                {submission.reviewers.map(
-                  (r: { id: string; name: string; email: string }) => {
-                    const hasReview = submission.reviews?.some(
-                      (rev: { reviewer_id: string }) =>
-                        rev.reviewer_id === r.id
-                    );
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-t border-[var(--border)]"
-                      >
-                        <td className="px-4 py-2">{r.name}</td>
-                        <td className="px-4 py-2 text-[var(--muted)]">
-                          {r.email}
-                        </td>
-                        <td className="px-4 py-2">
-                          {hasReview ? (
-                            <span className="text-[var(--success)] text-xs font-medium">
-                              Reviewed
-                            </span>
-                          ) : (
-                            <span className="text-[var(--muted)] text-xs">
-                              Pending
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <Link
-                            href={`/review/${submission.id}/${r.id}`}
-                            className="text-xs"
-                          >
-                            {hasReview ? "View" : "Submit Review"}
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  }
-                )}
+                {reviewers.map((r: { id: string; name: string; email: string }) => {
+                  const hasReview = reviews?.some(
+                    (rev: { reviewer_id: string }) => rev.reviewer_id === r.id
+                  );
+                  return (
+                    <tr key={r.id} className="border-t border-[var(--border)]">
+                      <td className="px-4 py-2">{r.name}</td>
+                      <td className="px-4 py-2 text-[var(--muted)]">{r.email}</td>
+                      <td className="px-4 py-2">
+                        {hasReview ? (
+                          <span className="text-[var(--success)] text-xs font-medium">Reviewed</span>
+                        ) : (
+                          <span className="text-[var(--muted)] text-xs">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2">
+                        <Link href={`/review/${id}/${r.id}`} className="text-xs">
+                          {hasReview ? "View" : "Submit Review"}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="text-sm text-[var(--muted)] mb-4">
-            No reviewers assigned yet.
-          </p>
+          <p className="text-sm text-[var(--muted)] mb-4">No reviewers assigned yet.</p>
         )}
 
-        {(!submission.reviewers || submission.reviewers.length < 2) && (
-          <AssignReviewerForm submissionId={submission.id} />
+        {(!reviewers || reviewers.length < 2) && (
+          <AssignReviewerForm submissionId={id} />
         )}
       </section>
 
@@ -139,9 +120,9 @@ export default async function SubmissionPage({
           )}
         </h2>
 
-        {submission.reviews && submission.reviews.length > 0 ? (
+        {reviews && reviews.length > 0 ? (
           <div className="space-y-4">
-            {submission.reviews.map(
+            {reviews.map(
               (rev: {
                 id: string;
                 score: number;
@@ -149,14 +130,9 @@ export default async function SubmissionPage({
                 created_at: string;
                 reviewer: { name: string };
               }) => (
-                <div
-                  key={rev.id}
-                  className="border border-[var(--border)] rounded p-4"
-                >
+                <div key={rev.id} className="border border-[var(--border)] rounded p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">
-                      {rev.reviewer?.name ?? "Reviewer"}
-                    </span>
+                    <span className="text-sm font-medium">{rev.reviewer?.name ?? "Reviewer"}</span>
                     <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
                       <span>
                         Score: <strong className="text-[var(--foreground)]">{rev.score}</strong> / 10

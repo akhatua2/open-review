@@ -1,3 +1,4 @@
+import { getSubmission, getPdfUrl } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import ReviewForm from "./review-form";
@@ -11,43 +12,42 @@ export default async function ReviewPage({
 }) {
   const { submissionId, reviewerId } = await params;
 
-  const [{ data: submission }, { data: reviewer }, { data: existingReview }] =
-    await Promise.all([
-      supabase.from("submissions").select("*").eq("id", submissionId).single(),
-      supabase.from("reviewers").select("*").eq("id", reviewerId).single(),
-      supabase
-        .from("reviews")
-        .select("*")
-        .eq("submission_id", submissionId)
-        .eq("reviewer_id", reviewerId)
-        .maybeSingle(),
-    ]);
+  const submission = getSubmission(submissionId);
+  if (!submission) return notFound();
 
-  if (!submission || !reviewer) return notFound();
+  const [{ data: reviewer }, { data: existingReview }] = await Promise.all([
+    supabase.from("reviewers").select("*").eq("id", reviewerId).single(),
+    supabase
+      .from("reviews")
+      .select("*")
+      .eq("submission_id", submissionId)
+      .eq("reviewer_id", reviewerId)
+      .maybeSingle(),
+  ]);
 
-  // Verify this reviewer is actually assigned to this submission
+  if (!reviewer) return notFound();
   if (reviewer.submission_id !== submissionId) return notFound();
+
+  const pdfUrl = getPdfUrl(submission.pdf_file);
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">{submission.title}</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
-          {submission.author_name} &middot; Reviewer: {reviewer.name}
+          {submission.authors} &middot; Reviewer: {reviewer.name}
         </p>
       </div>
 
       {/* Embedded PDF */}
-      {submission.pdf_url && (
-        <div className="mb-8">
-          <iframe
-            src={submission.pdf_url}
-            className="w-full border border-[var(--border)] rounded"
-            style={{ height: "70vh" }}
-            title="Project PDF"
-          />
-        </div>
-      )}
+      <div className="mb-8">
+        <iframe
+          src={pdfUrl}
+          className="w-full border border-[var(--border)] rounded"
+          style={{ height: "70vh" }}
+          title="Project PDF"
+        />
+      </div>
 
       {/* Review section */}
       {existingReview ? (
