@@ -29,21 +29,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <header className="border-b border-[var(--border)]">
-          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center">
             <Link
               href="/"
               className="text-lg font-semibold text-[var(--foreground)] no-underline hover:no-underline"
             >
-              CS224N Reviews
+              CS224N Project Reviews
             </Link>
-            <nav className="flex gap-6 text-sm">
-              <Link href="/" className="text-[var(--muted)] no-underline hover:text-[var(--foreground)]">
-                Submissions
-              </Link>
-              <Link href="/submit" className="text-[var(--muted)] no-underline hover:text-[var(--foreground)]">
-                Submit Project
-              </Link>
-            </nav>
           </div>
         </header>
         <main className="max-w-5xl mx-auto px-4 py-8">{children}</main>

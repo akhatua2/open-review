@@ -39,7 +39,7 @@ export default function ReviewForm({
       return;
     }
 
-    router.push(`/submissions/${submissionId}`);
+    router.refresh();
   }
 
   return (
@@ -69,7 +69,7 @@ export default function ReviewForm({
           rows={8}
           required
           className="w-full border border-[var(--border)] rounded px-3 py-2 text-sm focus:outline-none focus:border-[var(--accent)] resize-y"
-          placeholder="Provide detailed feedback on the paper..."
+          placeholder="Provide detailed feedback on the project..."
         />
       </div>
 
