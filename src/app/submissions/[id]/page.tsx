@@ -38,7 +38,7 @@ export default async function SubmissionPage({
         &larr; All Projects
       </Link>
 
-      <div className="mt-4 mb-6">
+      <div className="mt-4 mb-4">
         <h1 className="text-2xl font-semibold">{submission.title}</h1>
         <p className="text-sm text-[var(--muted)] mt-1">
           {submission.authors} &middot; Mentor: {submission.mentor || "Unassigned"}
@@ -46,92 +46,99 @@ export default async function SubmissionPage({
             <> &middot; Milestone: {submission.milestone_score}</>
           )}
         </p>
-        <a
-          href={pdfUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-3 text-sm px-3 py-1.5 border border-[var(--border)] rounded no-underline hover:bg-[var(--surface)] hover:no-underline text-[var(--foreground)]"
-        >
-          Open PDF in new tab
-        </a>
       </div>
 
-      {/* Embedded PDF */}
-      <div className="mb-8">
-        <iframe
-          src={pdfUrl}
-          className="w-full border border-[var(--border)] rounded"
-          style={{ height: "70vh" }}
-          title="Project PDF"
-        />
-      </div>
-
-      {/* Existing Reviews */}
-      {reviews && reviews.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold mb-3">
-            Submitted Grades ({reviews.length})
-            {avgScore && (
-              <span className="ml-2 text-sm font-normal text-[var(--muted)]">
-                Avg: {avgScore} / {TOTAL_POINTS}
-              </span>
-            )}
-          </h2>
-          <div className="space-y-4">
-            {reviews.map(
-              (rev: {
-                id: string;
-                grader_name: string;
-                score: number;
-                rubric_selections: Record<string, number>;
-                additional_comments: string | null;
-                created_at: string;
-              }) => (
-                <div key={rev.id} className="border border-[var(--border)] rounded p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-medium">{rev.grader_name}</span>
-                    <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
-                      <span>
-                        Score: <strong className="text-[var(--foreground)]">{rev.score}</strong> / {TOTAL_POINTS}
-                      </span>
-                      <span>{new Date(rev.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                  {/* Show rubric breakdown */}
-                  <div className="text-xs text-[var(--muted)] space-y-1 mb-2">
-                    {RUBRIC.flatMap((g) => g.items).map((item) => {
-                      const selIdx = rev.rubric_selections[item.id];
-                      if (selIdx === undefined) return null;
-                      const opt = item.options[selIdx];
-                      return (
-                        <div key={item.id} className="flex gap-2">
-                          <span className="font-medium text-[var(--foreground)] w-12 shrink-0">
-                            {item.id.toUpperCase()}:
-                          </span>
-                          <span className={opt.deduction === 0 ? "" : "text-[var(--danger)]"}>
-                            {opt.deduction === 0 ? "Full marks" : `${opt.deduction} — ${opt.comment}`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {rev.additional_comments && (
-                    <p className="text-sm whitespace-pre-wrap mt-2 pt-2 border-t border-[var(--border)]">
-                      {rev.additional_comments}
-                    </p>
-                  )}
-                </div>
-              )
-            )}
+      {/* Two-column layout: PDF left, grading right */}
+      <div className="flex gap-6" style={{ height: "calc(100vh - 180px)" }}>
+        {/* Left: PDF viewer */}
+        <div className="w-1/2 flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Project Report</span>
+            <a
+              href={pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-[var(--muted)] no-underline hover:text-[var(--foreground)]"
+            >
+              Open in new tab
+            </a>
           </div>
-        </section>
-      )}
+          <iframe
+            src={pdfUrl}
+            className="flex-1 w-full border border-[var(--border)] rounded"
+            title="Project PDF"
+          />
+        </div>
 
-      {/* Grading Form */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Grade This Submission</h2>
-        <RubricForm submissionId={id} />
-      </section>
+        {/* Right: Grading panel (scrollable) */}
+        <div className="w-1/2 overflow-y-auto min-h-0 pr-2">
+          {/* Existing Reviews */}
+          {reviews && reviews.length > 0 && (
+            <section className="mb-6">
+              <h2 className="text-lg font-semibold mb-3">
+                Submitted Grades ({reviews.length})
+                {avgScore && (
+                  <span className="ml-2 text-sm font-normal text-[var(--muted)]">
+                    Avg: {avgScore} / {TOTAL_POINTS}
+                  </span>
+                )}
+              </h2>
+              <div className="space-y-3">
+                {reviews.map(
+                  (rev: {
+                    id: string;
+                    grader_name: string;
+                    score: number;
+                    rubric_selections: Record<string, number>;
+                    additional_comments: string | null;
+                    created_at: string;
+                  }) => (
+                    <div key={rev.id} className="border border-[var(--border)] rounded p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">{rev.grader_name}</span>
+                        <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
+                          <span>
+                            <strong className="text-[var(--foreground)]">{rev.score}</strong> / {TOTAL_POINTS}
+                          </span>
+                          <span>{new Date(rev.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-[var(--muted)] space-y-0.5">
+                        {RUBRIC.flatMap((g) => g.items).map((item) => {
+                          const selIdx = rev.rubric_selections[item.id];
+                          if (selIdx === undefined) return null;
+                          const opt = item.options[selIdx];
+                          return (
+                            <div key={item.id} className="flex gap-2">
+                              <span className="font-medium text-[var(--foreground)] w-10 shrink-0">
+                                {item.id.toUpperCase()}
+                              </span>
+                              <span className={opt.deduction === 0 ? "" : "text-[var(--danger)]"}>
+                                {opt.deduction === 0 ? "Full marks" : `${opt.deduction} — ${opt.comment}`}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {rev.additional_comments && (
+                        <p className="text-xs whitespace-pre-wrap mt-2 pt-2 border-t border-[var(--border)]">
+                          {rev.additional_comments}
+                        </p>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Grading Form */}
+          <section>
+            <h2 className="text-lg font-semibold mb-4">Grade This Submission</h2>
+            <RubricForm submissionId={id} mentorName={submission.mentor || ""} />
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

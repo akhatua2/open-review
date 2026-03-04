@@ -4,17 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RUBRIC, TOTAL_POINTS, computeScore } from "@/lib/rubric";
 
-export default function RubricForm({ submissionId }: { submissionId: string }) {
+export default function RubricForm({
+  submissionId,
+  mentorName,
+}: {
+  submissionId: string;
+  mentorName: string;
+}) {
   const router = useRouter();
   const [selections, setSelections] = useState<Record<string, number>>({});
-  const [graderName, setGraderName] = useState("");
   const [additionalComments, setAdditionalComments] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const currentScore = computeScore(selections);
 
-  // Check all items are selected
   const allItems = RUBRIC.flatMap((g) => g.items);
   const allSelected = allItems.every((item) => selections[item.id] !== undefined);
 
@@ -24,7 +28,7 @@ export default function RubricForm({ submissionId }: { submissionId: string }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!allSelected || !graderName.trim()) return;
+    if (!allSelected) return;
 
     setSubmitting(true);
     setError("");
@@ -34,7 +38,7 @@ export default function RubricForm({ submissionId }: { submissionId: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submission_id: submissionId,
-        grader_name: graderName.trim(),
+        grader_name: mentorName || "Reviewer",
         score: currentScore,
         rubric_selections: selections,
         additional_comments: additionalComments.trim() || null,
@@ -53,16 +57,9 @@ export default function RubricForm({ submissionId }: { submissionId: string }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="mb-6">
-        <label className="block text-sm font-medium mb-1">Your Name</label>
-        <input
-          value={graderName}
-          onChange={(e) => setGraderName(e.target.value)}
-          required
-          placeholder="e.g. Nevin George"
-          className="border border-[var(--border)] rounded px-3 py-1.5 text-sm focus:outline-none focus:border-[var(--accent)] w-64"
-        />
-      </div>
+      <p className="text-sm text-[var(--muted)] mb-4">
+        Grading as: <strong className="text-[var(--foreground)]">{mentorName || "Reviewer"}</strong>
+      </p>
 
       <div className="space-y-6">
         {RUBRIC.map((group) => (
@@ -146,7 +143,7 @@ export default function RubricForm({ submissionId }: { submissionId: string }) {
         </div>
         <button
           type="submit"
-          disabled={submitting || !allSelected || !graderName.trim()}
+          disabled={submitting || !allSelected}
           className="px-4 py-2 bg-[var(--accent)] text-white text-sm rounded hover:bg-[var(--accent-hover)] disabled:opacity-50"
         >
           {submitting ? "Submitting..." : "Submit Grade"}

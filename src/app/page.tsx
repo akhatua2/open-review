@@ -4,13 +4,29 @@ import { isAdmin } from "@/lib/auth";
 import { TOTAL_POINTS } from "@/lib/rubric";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import MentorFilter from "./mentor-filter";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ mentor?: string }>;
+}) {
   if (!(await isAdmin())) redirect("/login");
 
-  const submissions = getAllSubmissions();
+  const { mentor } = await searchParams;
+  const allSubmissions = getAllSubmissions();
+
+  // Get unique mentors for the filter
+  const mentors = [
+    ...new Set(allSubmissions.map((s) => s.mentor).filter(Boolean) as string[]),
+  ].sort();
+
+  // Filter by mentor if selected
+  const submissions = mentor
+    ? allSubmissions.filter((s) => s.mentor === mentor)
+    : allSubmissions;
 
   const { data: reviews } = await supabase.from("reviews").select("submission_id, score");
 
@@ -22,7 +38,6 @@ export default async function Home() {
     reviewData[r.submission_id].count++;
     reviewData[r.submission_id].avgScore += r.score;
   });
-  // Compute averages
   Object.values(reviewData).forEach((d) => {
     d.avgScore = Math.round((d.avgScore / d.count) * 100) / 100;
   });
@@ -31,7 +46,10 @@ export default async function Home() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Final Projects</h1>
-        <span className="text-sm text-[var(--muted)]">{submissions.length} submissions</span>
+        <div className="flex items-center gap-3">
+          <MentorFilter mentors={mentors} />
+          <span className="text-sm text-[var(--muted)]">{submissions.length} submissions</span>
+        </div>
       </div>
 
       <div className="border border-[var(--border)] rounded overflow-hidden">
