@@ -6,10 +6,10 @@ import { RUBRIC, TOTAL_POINTS, computeScore } from "@/lib/rubric";
 
 export default function RubricForm({
   submissionId,
-  mentorName,
+  graderName,
 }: {
   submissionId: string;
-  mentorName: string;
+  graderName: string;
 }) {
   const router = useRouter();
   const [selections, setSelections] = useState<Record<string, number>>({});
@@ -38,7 +38,7 @@ export default function RubricForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         submission_id: submissionId,
-        grader_name: mentorName || "Reviewer",
+        grader_name: graderName || "Reviewer",
         score: currentScore,
         rubric_selections: selections,
         additional_comments: additionalComments.trim() || null,
@@ -58,7 +58,7 @@ export default function RubricForm({
   return (
     <form onSubmit={handleSubmit}>
       <p className="text-sm text-[var(--muted)] mb-4">
-        Grading as: <strong className="text-[var(--foreground)]">{mentorName || "Reviewer"}</strong>
+        Grading as: <strong className="text-[var(--foreground)]">{graderName || "Reviewer"}</strong>
       </p>
 
       <div className="space-y-6">

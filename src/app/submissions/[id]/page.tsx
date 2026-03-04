@@ -1,6 +1,6 @@
 import { getSubmission, getPdfUrl } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
-import { isAdmin } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { RUBRIC, TOTAL_POINTS } from "@/lib/rubric";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
@@ -13,11 +13,17 @@ export default async function SubmissionPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  if (!(await isAdmin())) redirect("/login");
+  const session = await getSession();
+  if (!session) redirect("/login");
   const { id } = await params;
 
   const submission = getSubmission(id);
   if (!submission) return notFound();
+
+  // Mentors can only access their assigned papers
+  if (session.role === "mentor" && submission.mentor !== session.name) {
+    return notFound();
+  }
 
   const { data: reviews } = await supabase
     .from("reviews")
@@ -135,7 +141,7 @@ export default async function SubmissionPage({
           {/* Grading Form */}
           <section>
             <h2 className="text-lg font-semibold mb-4">Grade This Submission</h2>
-            <RubricForm submissionId={id} mentorName={submission.mentor || ""} />
+            <RubricForm submissionId={id} graderName={session.role === "mentor" ? session.name : submission.mentor || ""} />
           </section>
         </div>
       </div>

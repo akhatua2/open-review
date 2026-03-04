@@ -1,6 +1,6 @@
 import { getAllSubmissions, Submission } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
-import { isAdmin } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { TOTAL_POINTS } from "@/lib/rubric";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -13,20 +13,27 @@ export default async function Home({
 }: {
   searchParams: Promise<{ mentor?: string }>;
 }) {
-  if (!(await isAdmin())) redirect("/login");
+  const session = await getSession();
+  if (!session) redirect("/login");
 
-  const { mentor } = await searchParams;
+  const { mentor: mentorParam } = await searchParams;
   const allSubmissions = getAllSubmissions();
 
-  // Get unique mentors for the filter
+  // Get unique mentors for the filter (admin only)
   const mentors = [
     ...new Set(allSubmissions.map((s) => s.mentor).filter(Boolean) as string[]),
   ].sort();
 
-  // Filter by mentor if selected
-  const submissions = mentor
-    ? allSubmissions.filter((s) => s.mentor === mentor)
-    : allSubmissions;
+  // Filter submissions based on role
+  let submissions: Submission[];
+  if (session.role === "mentor") {
+    // Mentors only see their assigned papers
+    submissions = allSubmissions.filter((s) => s.mentor === session.name);
+  } else if (mentorParam) {
+    submissions = allSubmissions.filter((s) => s.mentor === mentorParam);
+  } else {
+    submissions = allSubmissions;
+  }
 
   const { data: reviews } = await supabase.from("reviews").select("submission_id, score");
 
@@ -45,9 +52,18 @@ export default async function Home({
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Final Projects</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">
+            {session.role === "mentor" ? `${session.name}'s Papers` : "Final Projects"}
+          </h1>
+          {session.role === "mentor" && (
+            <p className="text-sm text-[var(--muted)] mt-1">
+              Logged in as mentor
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-3">
-          <MentorFilter mentors={mentors} />
+          {session.role === "admin" && <MentorFilter mentors={mentors} />}
           <span className="text-sm text-[var(--muted)]">{submissions.length} submissions</span>
         </div>
       </div>
@@ -58,7 +74,7 @@ export default async function Home({
             <tr className="bg-[var(--surface)] text-left text-[var(--muted)] text-xs uppercase tracking-wide">
               <th className="px-4 py-3 font-medium">Title</th>
               <th className="px-4 py-3 font-medium">Authors</th>
-              <th className="px-4 py-3 font-medium w-32">Mentor</th>
+              {session.role === "admin" && <th className="px-4 py-3 font-medium w-32">Mentor</th>}
               <th className="px-4 py-3 font-medium w-24">Grades</th>
               <th className="px-4 py-3 font-medium w-24">Avg Score</th>
             </tr>
@@ -74,7 +90,9 @@ export default async function Home({
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-[var(--muted)]">{s.authors}</td>
-                  <td className="px-4 py-3 text-[var(--muted)]">{s.mentor || "—"}</td>
+                  {session.role === "admin" && (
+                    <td className="px-4 py-3 text-[var(--muted)]">{s.mentor || "—"}</td>
+                  )}
                   <td className="px-4 py-3">
                     {rd ? (
                       rd.count >= 2 ? (
