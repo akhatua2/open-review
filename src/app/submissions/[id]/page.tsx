@@ -1,6 +1,7 @@
 import { getSubmission, getPdfUrl } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
-import { notFound } from "next/navigation";
+import { isAdmin } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import AssignReviewerForm from "./assign-reviewer-form";
 
@@ -11,6 +12,7 @@ export default async function SubmissionPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (!(await isAdmin())) redirect("/login");
   const { id } = await params;
   const submission = getSubmission(id);
   if (!submission) return notFound();
@@ -52,8 +54,18 @@ export default async function SubmissionPage({
           rel="noopener noreferrer"
           className="inline-block mt-3 text-sm px-3 py-1.5 border border-[var(--border)] rounded no-underline hover:bg-[var(--surface)] hover:no-underline text-[var(--foreground)]"
         >
-          View PDF
+          Open PDF in new tab
         </a>
+      </div>
+
+      {/* Embedded PDF */}
+      <div className="mb-8">
+        <iframe
+          src={pdfUrl}
+          className="w-full border border-[var(--border)] rounded"
+          style={{ height: "70vh" }}
+          title="Project PDF"
+        />
       </div>
 
       {/* Reviewers */}

@@ -1,10 +1,13 @@
 import { getAllSubmissions, Submission } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
+import { isAdmin } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  if (!(await isAdmin())) redirect("/login");
   const submissions = getAllSubmissions();
 
   // Fetch reviewer and review counts from Supabase
