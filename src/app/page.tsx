@@ -1,6 +1,7 @@
 import { getAllSubmissions, Submission } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
 import { isAdmin } from "@/lib/auth";
+import { TOTAL_POINTS } from "@/lib/rubric";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
@@ -8,19 +9,22 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   if (!(await isAdmin())) redirect("/login");
+
   const submissions = getAllSubmissions();
 
-  // Fetch reviewer and review counts from Supabase
-  const { data: reviewers } = await supabase.from("reviewers").select("submission_id");
-  const { data: reviews } = await supabase.from("reviews").select("submission_id");
+  const { data: reviews } = await supabase.from("reviews").select("submission_id, score");
 
-  const reviewerCounts: Record<string, number> = {};
-  const reviewCounts: Record<string, number> = {};
-  reviewers?.forEach((r) => {
-    reviewerCounts[r.submission_id] = (reviewerCounts[r.submission_id] || 0) + 1;
-  });
+  const reviewData: Record<string, { count: number; avgScore: number }> = {};
   reviews?.forEach((r) => {
-    reviewCounts[r.submission_id] = (reviewCounts[r.submission_id] || 0) + 1;
+    if (!reviewData[r.submission_id]) {
+      reviewData[r.submission_id] = { count: 0, avgScore: 0 };
+    }
+    reviewData[r.submission_id].count++;
+    reviewData[r.submission_id].avgScore += r.score;
+  });
+  // Compute averages
+  Object.values(reviewData).forEach((d) => {
+    d.avgScore = Math.round((d.avgScore / d.count) * 100) / 100;
   });
 
   return (
@@ -37,14 +41,13 @@ export default async function Home() {
               <th className="px-4 py-3 font-medium">Title</th>
               <th className="px-4 py-3 font-medium">Authors</th>
               <th className="px-4 py-3 font-medium w-32">Mentor</th>
-              <th className="px-4 py-3 font-medium w-24">Reviewers</th>
-              <th className="px-4 py-3 font-medium w-24">Reviews</th>
+              <th className="px-4 py-3 font-medium w-24">Grades</th>
+              <th className="px-4 py-3 font-medium w-24">Avg Score</th>
             </tr>
           </thead>
           <tbody>
             {submissions.map((s: Submission) => {
-              const rc = reviewerCounts[s.id] || 0;
-              const revc = reviewCounts[s.id] || 0;
+              const rd = reviewData[s.id];
               return (
                 <tr key={s.id} className="border-t border-[var(--border)] hover:bg-[var(--surface)]">
                   <td className="px-4 py-3">
@@ -54,14 +57,22 @@ export default async function Home() {
                   </td>
                   <td className="px-4 py-3 text-[var(--muted)]">{s.authors}</td>
                   <td className="px-4 py-3 text-[var(--muted)]">{s.mentor || "—"}</td>
-                  <td className="px-4 py-3 text-[var(--muted)]">{rc} / 2</td>
                   <td className="px-4 py-3">
-                    {revc === 2 ? (
-                      <span className="text-[var(--success)] text-xs font-medium">Complete</span>
-                    ) : revc > 0 ? (
-                      <span className="text-xs">{revc} / 2</span>
+                    {rd ? (
+                      rd.count >= 2 ? (
+                        <span className="text-[var(--success)] text-xs font-medium">Complete ({rd.count})</span>
+                      ) : (
+                        <span className="text-xs">{rd.count} / 2</span>
+                      )
                     ) : (
                       <span className="text-[var(--muted)] text-xs">Pending</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {rd ? (
+                      <span className="text-sm">{rd.avgScore} / {TOTAL_POINTS}</span>
+                    ) : (
+                      <span className="text-[var(--muted)] text-xs">—</span>
                     )}
                   </td>
                 </tr>

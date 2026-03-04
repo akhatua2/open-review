@@ -1,9 +1,10 @@
 import { getSubmission, getPdfUrl } from "@/lib/submissions";
 import { supabase } from "@/lib/supabase";
 import { isAdmin } from "@/lib/auth";
+import { RUBRIC, TOTAL_POINTS } from "@/lib/rubric";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import AssignReviewerForm from "./assign-reviewer-form";
+import RubricForm from "./rubric-form";
 
 export const dynamic = "force-dynamic";
 
@@ -14,24 +15,21 @@ export default async function SubmissionPage({
 }) {
   if (!(await isAdmin())) redirect("/login");
   const { id } = await params;
+
   const submission = getSubmission(id);
   if (!submission) return notFound();
 
-  const { data: reviewers } = await supabase
-    .from("reviewers")
-    .select("*")
-    .eq("submission_id", id);
-
   const { data: reviews } = await supabase
     .from("reviews")
-    .select("*, reviewer:reviewers(*)")
-    .eq("submission_id", id);
+    .select("*")
+    .eq("submission_id", id)
+    .order("created_at", { ascending: true });
 
   const pdfUrl = getPdfUrl(submission.pdf_file);
 
   const avgScore =
     reviews && reviews.length > 0
-      ? (reviews.reduce((sum: number, r: { score: number }) => sum + r.score, 0) / reviews.length).toFixed(1)
+      ? (reviews.reduce((sum: number, r: { score: number }) => sum + r.score, 0) / reviews.length).toFixed(2)
       : null;
 
   return (
@@ -68,98 +66,71 @@ export default async function SubmissionPage({
         />
       </div>
 
-      {/* Reviewers */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-3">
-          Reviewers ({reviewers?.length ?? 0} / 2)
-        </h2>
-
-        {reviewers && reviewers.length > 0 ? (
-          <div className="border border-[var(--border)] rounded overflow-hidden mb-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-[var(--surface)] text-left text-[var(--muted)] text-xs uppercase tracking-wide">
-                  <th className="px-4 py-2 font-medium">Name</th>
-                  <th className="px-4 py-2 font-medium">Email</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Review Link</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reviewers.map((r: { id: string; name: string; email: string }) => {
-                  const hasReview = reviews?.some(
-                    (rev: { reviewer_id: string }) => rev.reviewer_id === r.id
-                  );
-                  return (
-                    <tr key={r.id} className="border-t border-[var(--border)]">
-                      <td className="px-4 py-2">{r.name}</td>
-                      <td className="px-4 py-2 text-[var(--muted)]">{r.email}</td>
-                      <td className="px-4 py-2">
-                        {hasReview ? (
-                          <span className="text-[var(--success)] text-xs font-medium">Reviewed</span>
-                        ) : (
-                          <span className="text-[var(--muted)] text-xs">Pending</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2">
-                        <Link href={`/review/${id}/${r.id}`} className="text-xs">
-                          {hasReview ? "View" : "Submit Review"}
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-sm text-[var(--muted)] mb-4">No reviewers assigned yet.</p>
-        )}
-
-        {(!reviewers || reviewers.length < 2) && (
-          <AssignReviewerForm submissionId={id} />
-        )}
-      </section>
-
-      {/* Reviews */}
-      <section>
-        <h2 className="text-lg font-semibold mb-3">
-          Reviews
-          {avgScore && (
-            <span className="ml-2 text-sm font-normal text-[var(--muted)]">
-              Avg: {avgScore} / 10
-            </span>
-          )}
-        </h2>
-
-        {reviews && reviews.length > 0 ? (
+      {/* Existing Reviews */}
+      {reviews && reviews.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">
+            Submitted Grades ({reviews.length})
+            {avgScore && (
+              <span className="ml-2 text-sm font-normal text-[var(--muted)]">
+                Avg: {avgScore} / {TOTAL_POINTS}
+              </span>
+            )}
+          </h2>
           <div className="space-y-4">
             {reviews.map(
               (rev: {
                 id: string;
+                grader_name: string;
                 score: number;
-                comments: string;
+                rubric_selections: Record<string, number>;
+                additional_comments: string | null;
                 created_at: string;
-                reviewer: { name: string };
               }) => (
                 <div key={rev.id} className="border border-[var(--border)] rounded p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">{rev.reviewer?.name ?? "Reviewer"}</span>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium">{rev.grader_name}</span>
                     <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
                       <span>
-                        Score: <strong className="text-[var(--foreground)]">{rev.score}</strong> / 10
+                        Score: <strong className="text-[var(--foreground)]">{rev.score}</strong> / {TOTAL_POINTS}
                       </span>
                       <span>{new Date(rev.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <p className="text-sm whitespace-pre-wrap">{rev.comments}</p>
+                  {/* Show rubric breakdown */}
+                  <div className="text-xs text-[var(--muted)] space-y-1 mb-2">
+                    {RUBRIC.flatMap((g) => g.items).map((item) => {
+                      const selIdx = rev.rubric_selections[item.id];
+                      if (selIdx === undefined) return null;
+                      const opt = item.options[selIdx];
+                      return (
+                        <div key={item.id} className="flex gap-2">
+                          <span className="font-medium text-[var(--foreground)] w-12 shrink-0">
+                            {item.id.toUpperCase()}:
+                          </span>
+                          <span className={opt.deduction === 0 ? "" : "text-[var(--danger)]"}>
+                            {opt.deduction === 0 ? "Full marks" : `${opt.deduction} — ${opt.comment}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {rev.additional_comments && (
+                    <p className="text-sm whitespace-pre-wrap mt-2 pt-2 border-t border-[var(--border)]">
+                      {rev.additional_comments}
+                    </p>
+                  )}
                 </div>
               )
             )}
           </div>
-        ) : (
-          <p className="text-sm text-[var(--muted)]">No reviews yet.</p>
-        )}
+        </section>
+      )}
+
+      {/* Grading Form */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4">Grade This Submission</h2>
+        <RubricForm submissionId={id} />
       </section>
     </div>
   );
